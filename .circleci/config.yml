@@ -1,0 +1,341 @@
+version: 2.1
+
+parameters:
+  jmeter_directory_input:
+    type: string
+    default: "jmeter"
+  junit_file_name:
+    type: string
+    default: "output.xml"
+  properties_file_name:
+    type: string
+    default: "service.properties"
+  environment_name:
+    type: string
+    default: "e2e" # Replace this value your alias when running
+
+orbs:
+  windows: circleci/windows@2.2.0
+  terraform: circleci/terraform@3.0.0
+  azure-cli: circleci/azure-cli@1.2.0
+
+commands:
+  login-to-azure:
+    steps:
+      - azure-cli/install
+
+      - run:
+          name: "Verify Azure install"
+          command: az -v
+
+      - azure-cli/login-with-service-principal:
+          azure-sp: ARM_CLIENT_ID
+          azure-sp-password: ARM_CLIENT_SECRET
+          azure-sp-tenant: ARM_TENANT_ID
+
+  login-to-azure-down:
+    steps:
+      - azure-cli/install
+
+      - run: sudo apt-cache policy azure-cli | sudo apt-get install --allow-downgrades azure-cli=2.18.0-1~stretch
+
+      - run:
+          name: "Verify Azure install"
+          command: az -v
+
+      - azure-cli/login-with-service-principal:
+          azure-sp: ARM_CLIENT_ID
+          azure-sp-password: ARM_CLIENT_SECRET
+          azure-sp-tenant: ARM_TENANT_ID
+
+  install-terraform-linux:
+    steps:
+      - run:
+          name: "Install terraform"
+          command: |
+            sudo apt-get update && sudo apt-get install -y gnupg software-properties-common curl
+            curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+            sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+            sudo apt-get update && sudo apt-get install terraform
+
+  # build-netapp:
+  #   parameters:
+  #     app_dir:
+  #       type: string
+  #   steps:
+  #     - run:
+  #         name: "Nuget Restore"
+  #         working_directory: << parameters.app_dir >>
+  #         command: >
+  #           .\nuget.exe
+  #           restore
+
+  #     - run:
+  #         name: "Build Application"
+  #         working_directory: << parameters.app_dir >>
+  #         command: >
+  #           dotnet
+  #           msbuild
+  #           "/p:Configuration=Release;PublishDestination=Publish/<< parameters.app_dir >>"
+  #           /t:PublishToFileSystem
+
+  #     - run:
+  #         name: "Zip package folder"
+  #         working_directory: << parameters.app_dir >>
+  #         command: >
+  #           Compress-Archive
+  #           -Path "<< parameters.app_dir >>/Publish/*"
+  #           -DestinationPath << parameters.app_dir >>.zip
+
+  #     - persist_to_workspace:
+  #         name: "Upload zip file to shared workspace"
+  #         root: .
+  #         paths:
+  #           - << parameters.app_dir >>/<< parameters.app_dir >>.zip
+
+  # build-netcoreapp:
+    parameters:
+      app_dir:
+        type: string
+    steps:
+      - run:
+          name: "Build Application"
+          working_directory: << parameters.app_dir >>
+          command: >
+            dotnet
+            publish
+            --configuration Release
+            --output Publish/<< parameters.app_dir >>
+
+      - run:
+          name: "Zip package folder"
+          working_directory: << parameters.app_dir >>
+          command: >
+            Compress-Archive
+            -Path "Publish/*"
+            -DestinationPath << parameters.app_dir >>.zip
+
+      - persist_to_workspace:
+          name: "Upload zip file to shared workspace"
+          root: .
+          paths:
+            - << parameters.app_dir >>/<< parameters.app_dir >>.zip
+
+jobs:
+  build_image:
+    description: Build and Push JMeter Docker image
+    executor:
+      name: azure-cli/default
+    steps:
+      - checkout
+
+      - login-to-azure
+
+      - run:
+          name: "Build and Push JMeter Docker image"
+          command: >
+            az acr build
+            -t $TF_VAR_JMETER_DOCKER_IMAGE
+            -r $TF_VAR_JMETER_IMAGE_REGISTRY_NAME
+            -f docker/Dockerfile
+            .
+
+  # build_apps:
+  #   executor:
+  #     name: windows/default
+  #   steps:
+  #     - checkout
+
+  #     - build-netapp:
+  #         app_dir: BofAProtoSvc
+
+  #     - build-netcoreapp:
+  #         app_dir: IdentityServer
+
+  # deploy_script:
+    executor:
+      name: azure-cli/default
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      - login-to-azure-down
+
+      - run:
+          name: "Invoking the deploy script for infrastructure and dsc configuration"
+          working_directory: scripts
+          command: |
+            chmod a+x env_setup.sh
+            ./env_setup.sh << pipeline.parameters.environment_name >>
+            cp ../jmeter/<< pipeline.parameters.properties_file_name >> ../
+
+      - persist_to_workspace:
+          name: "Upload output file to shared workspace"
+          root: .
+          paths:
+            - << pipeline.parameters.properties_file_name >>
+
+  load_test:
+    machine:
+      image: ubuntu-2004:202107-02
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      - login-to-azure
+
+      - install-terraform-linux
+
+      - terraform/init:
+          path: terraform
+
+      - terraform/validate:
+          path: terraform
+
+      - terraform/plan:
+          path: terraform
+          var: "PIPELINE_NUMBER=<< pipeline.number >>"
+
+      - run:
+          name: "Writing pipeline number to env"
+          command: |
+            echo "TF_VAR_PIPELINE_NUMBER=<< pipeline.number >>" >> .env
+
+      - run:
+          name: "Run Terraform Apply (target=file share)"
+          working_directory: terraform
+          command: >
+            terraform apply
+            -target azurerm_storage_share.jmeter_share
+            -var "PIPELINE_NUMBER=<< pipeline.number >>"
+            -auto-approve
+
+      - run:
+          name: "Transfer JMeter Files to Storage Account"
+          working_directory: terraform
+          command: |
+            URL=$(terraform output --raw storage_file_share_url)
+            KEY=$(terraform output --raw storage_account_key)
+            cp ../<< pipeline.parameters.properties_file_name >>  ../jmeter/<< pipeline.parameters.properties_file_name >>
+
+            az storage file upload-batch \
+            --destination $URL \
+            --source "../<< pipeline.parameters.jmeter_directory_input >>" \
+            --account-key $KEY
+
+      - run:
+          name: "Run Terraform Apply"
+          working_directory: terraform
+          command: |
+            # Run terraform apply command
+            terraform apply -auto-approve
+
+      - run:
+          name: "Waiting for test results."
+          working_directory: terraform
+          command: |
+            RG=$(terraform output --raw resource_group_name)
+            NAME=$(terraform output --raw jmeter_controller_name)
+            echo "`date`: Started!"
+            while [ $(az container show -g $RG -n $NAME --query "containers[0].instanceView.currentState.state" -o tsv) == "Running" ]; do
+              echo "`date`: Still Running..."
+              sleep 20
+            done
+            echo "`date`: Finished!"
+
+      - run:
+          name: "Get output logs."
+          working_directory: terraform
+          command: |
+            RG=$(terraform output --raw resource_group_name)
+            NAME=$(terraform output --raw jmeter_controller_name)
+            az container logs -g $RG -n $NAME
+
+      - run:
+          name: "Download JMeter Results."
+          working_directory: terraform
+          command: |
+            KEY=$(terraform output --raw storage_account_key)
+            STORAGE_NAME=$(terraform output --raw storage_account_name)
+            FILESHARE_NAME=$(terraform output --raw storage_file_share_name)
+            JMETER_RESULTS=$(terraform output --raw jmeter_results_file)
+            echo $JMETER_RESULTS_PATH
+            az storage file download -p $JMETER_RESULTS -s $FILESHARE_NAME --account-name $STORAGE_NAME --account-key $KEY
+
+      - run:
+          name: "Convert JMeter results to JUnit."
+          working_directory: terraform
+          command: |
+            JMETER_RESULTS=$(terraform output --raw jmeter_results_file)
+            JUNIT_RESULTS=<< pipeline.parameters.junit_file_name >>
+            python3 ../scripts/jtl_junit_converter.py $JMETER_RESULTS $JUNIT_RESULTS
+
+      - run:
+          name: "Upload JUnit Results to fileshare."
+          working_directory: terraform
+          command: |
+            KEY=$(terraform output --raw storage_account_key)
+            STORAGE_NAME=$(terraform output --raw storage_account_name)
+            FILESHARE_NAME=$(terraform output --raw storage_file_share_name)
+            JUNIT_RESULTS=<< pipeline.parameters.junit_file_name >>
+            az storage file upload -s $FILESHARE_NAME --source $JUNIT_RESULTS --account-name $STORAGE_NAME --account-key $KEY
+
+      - store_test_results:
+          name: "Store test results"
+          path: terraform
+
+      - store_artifacts:
+          path: terraform/<< pipeline.parameters.junit_file_name >>
+
+  cleanup:
+    executor:
+      name: azure-cli/default
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      - login-to-azure-down
+
+      - run:
+          name: "Clean up environment"
+          working_directory: scripts
+          command: |
+            chmod a+x ./cleanup.sh
+            ./cleanup.sh << pipeline.parameters.environment_name >> jmeter<< pipeline.number >>
+          when: always
+
+workflows:
+  build_jmeter_docker_image:
+    jobs:
+      - build_image_approval:
+          type: approval
+          filters:
+            branches:
+              only:
+                - main
+      - build_image:
+          requires:
+            - build_image_approval
+
+  build_deploy_loadtest:
+    jobs:
+      - build_apps
+      - deploy_script:
+          requires:
+            - build_apps
+      - load_test:
+          requires:
+            - deploy_script
+      - cleanup_approval:
+          type: approval
+          requires:
+            - load_test
+      - cleanup:
+          requires:
+            - cleanup_approval
