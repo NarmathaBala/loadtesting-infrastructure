@@ -315,10 +315,10 @@ workflows:
     jobs:
       - build_image_approval:
           type: approval
-          filters:
-            branches:
-              only:
-                - main
+          # filters:
+          #   branches:
+          #     only:
+          #       - main
       - build_image:
           requires:
             - build_image_approval
