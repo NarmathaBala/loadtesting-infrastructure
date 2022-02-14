@@ -58,42 +58,42 @@ commands:
             sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
             sudo apt-get update && sudo apt-get install terraform
 
-  # build-netapp:
-  #   parameters:
-  #     app_dir:
-  #       type: string
-  #   steps:
-  #     - run:
-  #         name: "Nuget Restore"
-  #         working_directory: << parameters.app_dir >>
-  #         command: >
-  #           .\nuget.exe
-  #           restore
+  build-netapp:
+    parameters:
+      app_dir:
+        type: string
+    steps:
+      - run:
+          name: "Nuget Restore"
+          working_directory: << parameters.app_dir >>
+          command: >
+            .\nuget.exe
+            restore
 
-  #     - run:
-  #         name: "Build Application"
-  #         working_directory: << parameters.app_dir >>
-  #         command: >
-  #           dotnet
-  #           msbuild
-  #           "/p:Configuration=Release;PublishDestination=Publish/<< parameters.app_dir >>"
-  #           /t:PublishToFileSystem
+      - run:
+          name: "Build Application"
+          working_directory: << parameters.app_dir >>
+          command: >
+            dotnet
+            msbuild
+            "/p:Configuration=Release;PublishDestination=Publish/<< parameters.app_dir >>"
+            /t:PublishToFileSystem
 
-  #     - run:
-  #         name: "Zip package folder"
-  #         working_directory: << parameters.app_dir >>
-  #         command: >
-  #           Compress-Archive
-  #           -Path "<< parameters.app_dir >>/Publish/*"
-  #           -DestinationPath << parameters.app_dir >>.zip
+      - run:
+          name: "Zip package folder"
+          working_directory: << parameters.app_dir >>
+          command: >
+            Compress-Archive
+            -Path "<< parameters.app_dir >>/Publish/*"
+            -DestinationPath << parameters.app_dir >>.zip
 
-  #     - persist_to_workspace:
-  #         name: "Upload zip file to shared workspace"
-  #         root: .
-  #         paths:
-  #           - << parameters.app_dir >>/<< parameters.app_dir >>.zip
+      - persist_to_workspace:
+          name: "Upload zip file to shared workspace"
+          root: .
+          paths:
+            - << parameters.app_dir >>/<< parameters.app_dir >>.zip
 
-  # build-netcoreapp:
+  build-netcoreapp:
     parameters:
       app_dir:
         type: string
@@ -140,19 +140,19 @@ jobs:
             -f docker/Dockerfile
             .
 
-  # build_apps:
-  #   executor:
-  #     name: windows/default
-  #   steps:
-  #     - checkout
+  build_apps:
+    executor:
+      name: windows/default
+    steps:
+      - checkout
 
-  #     - build-netapp:
-  #         app_dir: BofAProtoSvc
+      - build-netapp:
+          app_dir: BofAProtoSvc
 
-  #     - build-netcoreapp:
-  #         app_dir: IdentityServer
+      - build-netcoreapp:
+          app_dir: IdentityServer
 
-  # deploy_script:
+  deploy_script:
     executor:
       name: azure-cli/default
     steps:
@@ -323,19 +323,19 @@ workflows:
           requires:
             - build_image_approval
 
-  build_deploy_loadtest:
-    jobs:
-      - build_apps
-      - deploy_script:
-          requires:
-            - build_apps
-      - load_test:
-          requires:
-            - deploy_script
-      - cleanup_approval:
-          type: approval
-          requires:
-            - load_test
-      - cleanup:
-          requires:
-            - cleanup_approval
+  # build_deploy_loadtest:
+  #   jobs:
+  #     - build_apps
+  #     - deploy_script:
+  #         requires:
+  #           - build_apps
+  #     - load_test:
+  #         requires:
+  #           - deploy_script
+  #     - cleanup_approval:
+  #         type: approval
+  #         requires:
+  #           - load_test
+  #     - cleanup:
+  #         requires:
+  #           - cleanup_approval
