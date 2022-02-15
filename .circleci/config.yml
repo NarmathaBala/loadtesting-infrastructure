@@ -218,6 +218,7 @@ jobs:
           name: "Transfer JMeter Files to Storage Account"
           working_directory: terraform
           command: |
+            cp ../jmeter/<< pipeline.parameters.properties_file_name >> ../
             URL=$(terraform output --raw storage_file_share_url)
             KEY=$(terraform output --raw storage_account_key)
             cp ../<< pipeline.parameters.properties_file_name >>  ../jmeter/<< pipeline.parameters.properties_file_name >>
