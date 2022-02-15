@@ -76,7 +76,7 @@ variable "JMETER_STORAGE_QUOTA_GIGABYTES" {
 variable "JMETER_JMX_FILE" {
   type        = string
   description = "JMX file"
-  default = "bofaprototype-service.jmx"
+  default = "sample-loadtest.jmx"
 }
 
 variable "JMETER_RESULTS_FILE" {
