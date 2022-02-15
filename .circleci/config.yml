@@ -323,19 +323,19 @@ workflows:
           requires:
             - build_image_approval
 
-  # build_deploy_loadtest:
-  #   jobs:
-  #     - build_apps
-  #     - deploy_script:
-  #         requires:
-  #           - build_apps
-  #     - load_test:
-  #         requires:
-  #           - deploy_script
-  #     - cleanup_approval:
-  #         type: approval
-  #         requires:
-  #           - load_test
-  #     - cleanup:
-  #         requires:
-  #           - cleanup_approval
+  build_deploy_loadtest:
+    jobs:
+      # - build_apps
+      - deploy_script
+          # requires:
+          #   - build_apps
+      - load_test:
+          requires:
+            - deploy_script
+      - cleanup_approval:
+          type: approval
+          requires:
+            - load_test
+      - cleanup:
+          requires:
+            - cleanup_approval
