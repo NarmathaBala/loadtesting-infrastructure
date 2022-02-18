@@ -10,9 +10,6 @@ parameters:
   properties_file_name:
     type: string
     default: "service.properties"
-  environment_name:
-    type: string
-    default: "e2e" # Replace this value your alias when running
 
 orbs:
   windows: circleci/windows@2.2.0
@@ -208,7 +205,7 @@ jobs:
           working_directory: scripts
           command: |
             chmod a+x ./cleanup.sh
-            ./cleanup.sh << pipeline.parameters.environment_name >> jmeter<< pipeline.number >>
+            ./cleanup.sh jmeter<< pipeline.number >>
           when: always
 
 workflows:
