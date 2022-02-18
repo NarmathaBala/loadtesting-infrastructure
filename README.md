@@ -1,14 +1,12 @@
 # Load Testing Infrastructure
 
-## Introduction
+The purpose of this repository is to demonstrate the two different approaches of load testing.
 
-The purpose of this repository is to demonstrate the two different approaches of
-standing up a scalable infrastructure running a distributed Apache JMeter based load
+1. End-to-end scalable infrastructure running a distributed Apache JMeter based load
 tests orchestrated with a CircleCI pipeline.
+1. Leveraging Azure Load Test (Azure Resource) to orchestrate tests (*coming soon*)
 
-## Approaches
-
-### Container based JMeter Load Tests
+## Container based JMeter Load Tests
 
 This approach leverages Apache JMeter as an open source load and performance testing
 tool and uses Terraform to dynamically provision required infrastructure, run load
@@ -23,13 +21,13 @@ and pushes the image to Azure Container Registry (ACR).
 infrastructure. The load test is then run, and test results are published. The
 provisions infrastructure is destroyed after the run is complete.
 
-The testing pipeline consists of the following steps -
+    The `build_deploy_loadtest` testing pipeline consists of the following steps -
 
-- creates infrastructure on-demand
-- deploys the infrastructure
-- executes load tests
-- reports test results
-- destroys infrastructure on-demand
+        - create infrastructure on-demand
+        - deploy the infrastructure
+        - execute load tests
+        - report test results
+        - destroy infrastructure
 
 ![CircleCI Pipeline](images/load-testing.png)
 
@@ -51,3 +49,7 @@ to Environment Variables list.
     1. DOCKER_USERNAME
     1. JMETER_DOCKER_IMAGE
     1. LOCATION
+
+1. The worker node count can be changed with updates to variable `JMETER_WORKERS_COUNT` in the `terraform/variables.tf` file.
+
+> *Note: The `sample-loadtest.jmx` file is a very simple load test file to demonstrate the pipeline capabilities and does not excercise any true load tests.*
