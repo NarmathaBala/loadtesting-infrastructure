@@ -88,7 +88,7 @@ resource "azurerm_container_group" "jmeter_workers" {
 
   network_profile_id = azurerm_network_profile.jmeter_net_profile.id
 
-  restart_policy = "OnFailure"
+  restart_policy = "Never"
   image_registry_credential {
     server   = data.azurerm_container_registry.jmeter_acr.login_server
     username = data.azurerm_container_registry.jmeter_acr.admin_username
@@ -133,7 +133,7 @@ resource "azurerm_container_group" "jmeter_controller" {
 
   network_profile_id = azurerm_network_profile.jmeter_net_profile.id
 
-  restart_policy = "OnFailure"
+  restart_policy = "Never"
 
   image_registry_credential {
     server   = data.azurerm_container_registry.jmeter_acr.login_server
