@@ -2,26 +2,32 @@
 
 ## Introduction
 
-The purpose of this repository is to demonstrate the two different approaches of standing up a scalable
-infrastructure running a distributed Apache JMeter based load tests orchestrated with a CircleCI pipeline.
+The purpose of this repository is to demonstrate the two different approaches of
+standing up a scalable infrastructure running a distributed Apache JMeter based load
+tests orchestrated with a CircleCI pipeline.
 
 ## Approaches
 
-### Container based JMeter Tests
+### Container based JMeter Load Tests
 
-This approach leverages Apache JMeter as an open source load and performance testing tool and uses Terraform to dynamically provision and destroy the required infrastrucure.
+This approach leverages Apache JMeter as an open source load and performance testing
+tool and uses Terraform to dynamically provision required infrastructure, run load
+tests and tear down the infrastructure.
 
 The pipeline includes two workflows
 
-- One workflow `build_jmeter_docker_image`, builds a custom JMeter Docker container and pushes the image to Azure Container Registry (ACR).
+- One workflow `build_jmeter_docker_image`, builds a custom JMeter Docker container
+and pushes the image to Azure Container Registry (ACR).
 
-- Workflow `build_deploy_loadtest`, dynamically provisions load testing infrastructure. The load test is then run, and test results are published. The provisions infrastructure is destroyed after the run is complete.
+- Workflow `build_deploy_loadtest`, dynamically provisions load testing
+infrastructure. The load test is then run, and test results are published. The
+provisions infrastructure is destroyed after the run is complete.
 
 The testing pipeline consists of the following steps -
 
 - creates infrastructure on-demand
 - deploys the infrastructure
-- executes testing
+- executes load tests
 - reports test results
 - destroys infrastructure on-demand
 
@@ -29,9 +35,11 @@ The testing pipeline consists of the following steps -
 
 ## Getting Started
 
-1. Clone the GitHub repository to get started by connecting to your CircleCI account and `.circleci/config.yml`.
+1. Clone the GitHub repository to get started by connecting to your CircleCI account
+and `.circleci/config.yml`.
 
-1. [Create a Service Principal](https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals#service-principal-object). Gather Client ID, Client Secret and Azure Service Connection Name for adding them to Environment Variables list.
+1. [Create a Service Principal](https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals#service-principal-object). Gather Client ID, Client Secret and Azure Service Connection Name for adding them
+to Environment Variables list.
 
 1. Create Environment Variables in the CircleCI Project settings.
 

@@ -10,6 +10,9 @@ parameters:
   properties_file_name:
     type: string
     default: "service.properties"
+  environment_name:
+    type: string
+    default: "e2e" # Replace this value your alias when running
 
 orbs:
   windows: circleci/windows@2.2.0
