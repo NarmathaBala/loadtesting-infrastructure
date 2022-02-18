@@ -10,9 +10,6 @@ parameters:
   properties_file_name:
     type: string
     default: "service.properties"
-  environment_name:
-    type: string
-    default: "e2e" # Replace this value your alias when running
 
 orbs:
   windows: circleci/windows@2.2.0
@@ -58,69 +55,6 @@ commands:
             sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
             sudo apt-get update && sudo apt-get install terraform
 
-  build-netapp:
-    parameters:
-      app_dir:
-        type: string
-    steps:
-      - run:
-          name: "Nuget Restore"
-          working_directory: << parameters.app_dir >>
-          command: >
-            .\nuget.exe
-            restore
-
-      - run:
-          name: "Build Application"
-          working_directory: << parameters.app_dir >>
-          command: >
-            dotnet
-            msbuild
-            "/p:Configuration=Release;PublishDestination=Publish/<< parameters.app_dir >>"
-            /t:PublishToFileSystem
-
-      - run:
-          name: "Zip package folder"
-          working_directory: << parameters.app_dir >>
-          command: >
-            Compress-Archive
-            -Path "<< parameters.app_dir >>/Publish/*"
-            -DestinationPath << parameters.app_dir >>.zip
-
-      - persist_to_workspace:
-          name: "Upload zip file to shared workspace"
-          root: .
-          paths:
-            - << parameters.app_dir >>/<< parameters.app_dir >>.zip
-
-  build-netcoreapp:
-    parameters:
-      app_dir:
-        type: string
-    steps:
-      - run:
-          name: "Build Application"
-          working_directory: << parameters.app_dir >>
-          command: >
-            dotnet
-            publish
-            --configuration Release
-            --output Publish/<< parameters.app_dir >>
-
-      - run:
-          name: "Zip package folder"
-          working_directory: << parameters.app_dir >>
-          command: >
-            Compress-Archive
-            -Path "Publish/*"
-            -DestinationPath << parameters.app_dir >>.zip
-
-      - persist_to_workspace:
-          name: "Upload zip file to shared workspace"
-          root: .
-          paths:
-            - << parameters.app_dir >>/<< parameters.app_dir >>.zip
-
 jobs:
   build_image:
     description: Build and Push JMeter Docker image
@@ -139,43 +73,6 @@ jobs:
             -r $TF_VAR_JMETER_IMAGE_REGISTRY_NAME
             -f docker/Dockerfile
             .
-
-  build_apps:
-    executor:
-      name: windows/default
-    steps:
-      - checkout
-
-      - build-netapp:
-          app_dir: BofAProtoSvc
-
-      - build-netcoreapp:
-          app_dir: IdentityServer
-
-  deploy_script:
-    executor:
-      name: azure-cli/default
-    steps:
-      - checkout
-
-      - attach_workspace:
-          at: .
-
-      - login-to-azure-down
-
-      # - run:
-      #     name: "Invoking the deploy script for infrastructure and dsc configuration"
-      #     working_directory: scripts
-      #     command: |
-      #       chmod a+x env_setup.sh
-      #       ./env_setup.sh << pipeline.parameters.environment_name >>
-      #       cp ../jmeter/<< pipeline.parameters.properties_file_name >> ../
-
-      # - persist_to_workspace:
-      #     name: "Upload output file to shared workspace"
-      #     root: .
-      #     paths:
-      #       - << pipeline.parameters.properties_file_name >>
 
   load_test:
     machine:
@@ -316,23 +213,17 @@ workflows:
     jobs:
       - build_image_approval:
           type: approval
-          # filters:
-          #   branches:
-          #     only:
-          #       - main
+          filters:
+            branches:
+              only:
+                - main
       - build_image:
           requires:
             - build_image_approval
 
   build_deploy_loadtest:
     jobs:
-      # - build_apps
-      - deploy_script
-          # requires:
-          #   - build_apps
-      - load_test:
-          requires:
-            - deploy_script
+      - load_test
       - cleanup_approval:
           type: approval
           requires:
